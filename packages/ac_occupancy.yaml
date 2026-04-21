@@ -46,7 +46,6 @@ automation:
           - climate.ac
           - climate.ac_bedroom
           - climate.ac_lounge
-          - climate.ac_front_room
           - climate.ac_study
         attribute: current_temperature
       - platform: time_pattern
@@ -69,7 +68,6 @@ automation:
             - climate.ac
             - climate.ac_bedroom
             - climate.ac_lounge
-            - climate.ac_front_room
             - climate.ac_study
           sequence:
             - variables:
