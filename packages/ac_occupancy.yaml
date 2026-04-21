@@ -1,0 +1,130 @@
+# AC Occupancy Automation
+#
+# Turns on AC in rooms that are too hot or cold when Emily or Tom is home.
+# Turns off all AC units when the last person leaves.
+#
+# To activate, add this to configuration.yaml:
+#
+#   homeassistant:
+#     packages: !include_dir_named packages/
+
+input_number:
+  ac_temp_too_hot:
+    name: "AC Upper Temperature Threshold"
+    min: 20
+    max: 35
+    step: 0.5
+    unit_of_measurement: "°C"
+    initial: 24
+    icon: mdi:thermometer-high
+
+  ac_temp_too_cold:
+    name: "AC Lower Temperature Threshold"
+    min: 10
+    max: 22
+    step: 0.5
+    unit_of_measurement: "°C"
+    initial: 18
+    icon: mdi:thermometer-low
+
+automation:
+  - id: "ac_on_when_home_and_uncomfortable"
+    alias: "AC: Turn on when home and room is uncomfortable"
+    description: >
+      When someone arrives home, when a room temperature changes, or every 10
+      minutes while someone is home — turn on cooling in rooms above the upper
+      threshold and heating in rooms below the lower threshold.
+    mode: single
+    trigger:
+      - platform: state
+        entity_id:
+          - person.emily
+          - person.tom
+        to: "home"
+      - platform: state
+        entity_id:
+          - climate.ac
+          - climate.ac_bedroom
+          - climate.ac_lounge
+          - climate.ac_front_room
+          - climate.ac_study
+        attribute: current_temperature
+      - platform: time_pattern
+        minutes: "/10"
+    condition:
+      - condition: or
+        conditions:
+          - condition: state
+            entity_id: person.emily
+            state: "home"
+          - condition: state
+            entity_id: person.tom
+            state: "home"
+    action:
+      - variables:
+          too_hot: "{{ states('input_number.ac_temp_too_hot') | float(24) }}"
+          too_cold: "{{ states('input_number.ac_temp_too_cold') | float(18) }}"
+      - repeat:
+          for_each:
+            - climate.ac
+            - climate.ac_bedroom
+            - climate.ac_lounge
+            - climate.ac_front_room
+            - climate.ac_study
+          sequence:
+            - variables:
+                current_temp: "{{ state_attr(repeat.item, 'current_temperature') | float(-1) }}"
+            - choose:
+                - conditions:
+                    - condition: template
+                      value_template: "{{ current_temp > too_hot }}"
+                  sequence:
+                    - service: climate.set_hvac_mode
+                      target:
+                        entity_id: "{{ repeat.item }}"
+                      data:
+                        hvac_mode: cool
+                - conditions:
+                    - condition: template
+                      value_template: "{{ 0 < current_temp < too_cold }}"
+                  sequence:
+                    - service: climate.set_hvac_mode
+                      target:
+                        entity_id: "{{ repeat.item }}"
+                      data:
+                        hvac_mode: heat
+
+  - id: "ac_off_when_everyone_away"
+    alias: "AC: Turn off all when everyone leaves"
+    description: >
+      When a person leaves home and no one else is still home,
+      turn off all AC units.
+    mode: single
+    trigger:
+      - platform: state
+        entity_id:
+          - person.emily
+          - person.tom
+        from: "home"
+    condition:
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: person.emily
+            state: "home"
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: person.tom
+            state: "home"
+    action:
+      - service: climate.set_hvac_mode
+        target:
+          entity_id:
+            - climate.ac
+            - climate.ac_bedroom
+            - climate.ac_lounge
+            - climate.ac_front_room
+            - climate.ac_study
+        data:
+          hvac_mode: "off"
