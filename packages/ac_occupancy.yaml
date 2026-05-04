@@ -63,34 +63,45 @@ automation:
       - variables:
           too_hot: "{{ states('input_number.ac_temp_too_hot') | float(24) }}"
           too_cold: "{{ states('input_number.ac_temp_too_cold') | float(18) }}"
-      - repeat:
-          for_each:
-            - climate.ac
-            - climate.ac_bedroom
-            - climate.ac_lounge
-            - climate.ac_study
-          sequence:
-            - variables:
-                current_temp: "{{ state_attr(repeat.item, 'current_temperature') | float(-1) }}"
-            - choose:
-                - conditions:
-                    - condition: template
-                      value_template: "{{ current_temp > too_hot }}"
-                  sequence:
-                    - service: climate.set_hvac_mode
-                      target:
-                        entity_id: "{{ repeat.item }}"
-                      data:
-                        hvac_mode: cool
-                - conditions:
-                    - condition: template
-                      value_template: "{{ 0 < current_temp < too_cold }}"
-                  sequence:
-                    - service: climate.set_hvac_mode
-                      target:
-                        entity_id: "{{ repeat.item }}"
-                      data:
-                        hvac_mode: heat
+      - variables:
+          any_too_hot: >
+            {{ state_attr('climate.ac_lounge', 'current_temperature') | float(-1) > too_hot or
+               state_attr('climate.ac_bedroom', 'current_temperature') | float(-1) > too_hot or
+               state_attr('climate.ac_study', 'current_temperature') | float(-1) > too_hot }}
+          any_too_cold: >
+            {{ (state_attr('climate.ac_lounge', 'current_temperature') | float(-1) > 0 and
+                state_attr('climate.ac_lounge', 'current_temperature') | float(-1) < too_cold) or
+               (state_attr('climate.ac_bedroom', 'current_temperature') | float(-1) > 0 and
+                state_attr('climate.ac_bedroom', 'current_temperature') | float(-1) < too_cold) or
+               (state_attr('climate.ac_study', 'current_temperature') | float(-1) > 0 and
+                state_attr('climate.ac_study', 'current_temperature') | float(-1) < too_cold) }}
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ any_too_hot }}"
+            sequence:
+              - service: climate.set_hvac_mode
+                target:
+                  entity_id:
+                    - climate.ac
+                    - climate.ac_lounge
+                    - climate.ac_bedroom
+                    - climate.ac_study
+                data:
+                  hvac_mode: cool
+          - conditions:
+              - condition: template
+                value_template: "{{ any_too_cold }}"
+            sequence:
+              - service: climate.set_hvac_mode
+                target:
+                  entity_id:
+                    - climate.ac
+                    - climate.ac_lounge
+                    - climate.ac_bedroom
+                    - climate.ac_study
+                data:
+                  hvac_mode: heat
 
   - id: "ac_off_when_everyone_away"
     alias: "AC: Turn off all when everyone leaves"
