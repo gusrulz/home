@@ -2,6 +2,7 @@
 #
 # Turns on AC in rooms that are too hot or cold when Emily or Tom is home.
 # Turns off all AC units when the last person leaves.
+# Includes a night/morning schedule for room switching.
 #
 # To activate, add this to configuration.yaml:
 #
@@ -141,3 +142,142 @@ automation:
             - climate.ac_study
         data:
           hvac_mode: "off"
+
+  - id: "ac_night_mode_10pm"
+    alias: "AC: Night mode at 10pm"
+    description: >
+      Turn off lounge and study, keep bedroom. Switches MyFan to bedroom
+      to prevent lounge from auto-activating.
+      NOTE: assumes switch.ac_myfan OFF = bedroom, ON = lounge. Reverse
+      the turn_off/turn_on calls below if your switch works the other way.
+    mode: single
+    trigger:
+      - platform: time
+        at: "22:00:00"
+    condition:
+      - condition: or
+        conditions:
+          - condition: state
+            entity_id: person.emily
+            state: "home"
+          - condition: state
+            entity_id: person.tom
+            state: "home"
+      - condition: template
+        value_template: >
+          {% set too_hot = states('input_number.ac_temp_too_hot') | float(24) %}
+          {% set too_cold = states('input_number.ac_temp_too_cold') | float(18) %}
+          {{ state_attr('climate.ac_lounge', 'current_temperature') | float(-1) > too_hot
+             or state_attr('climate.ac_bedroom', 'current_temperature') | float(-1) > too_hot
+             or state_attr('climate.ac_study', 'current_temperature') | float(-1) > too_hot
+             or state_attr('climate.ac_lounge', 'current_temperature') | float(99) < too_cold
+             or state_attr('climate.ac_bedroom', 'current_temperature') | float(99) < too_cold
+             or state_attr('climate.ac_study', 'current_temperature') | float(99) < too_cold }}
+    action:
+      - service: climate.turn_off
+        target:
+          entity_id:
+            - climate.ac_lounge
+            - climate.ac_study
+      - service: switch.turn_off
+        target:
+          entity_id: switch.ac_myfan
+
+  - id: "ac_morning_lounge_5am"
+    alias: "AC: Morning - turn on lounge at 5am"
+    description: >
+      Turn on lounge and redirect MyFan back to lounge.
+    mode: single
+    trigger:
+      - platform: time
+        at: "05:00:00"
+    condition:
+      - condition: or
+        conditions:
+          - condition: state
+            entity_id: person.emily
+            state: "home"
+          - condition: state
+            entity_id: person.tom
+            state: "home"
+      - condition: template
+        value_template: >
+          {% set too_hot = states('input_number.ac_temp_too_hot') | float(24) %}
+          {% set too_cold = states('input_number.ac_temp_too_cold') | float(18) %}
+          {{ state_attr('climate.ac_lounge', 'current_temperature') | float(-1) > too_hot
+             or state_attr('climate.ac_bedroom', 'current_temperature') | float(-1) > too_hot
+             or state_attr('climate.ac_study', 'current_temperature') | float(-1) > too_hot
+             or state_attr('climate.ac_lounge', 'current_temperature') | float(99) < too_cold
+             or state_attr('climate.ac_bedroom', 'current_temperature') | float(99) < too_cold
+             or state_attr('climate.ac_study', 'current_temperature') | float(99) < too_cold }}
+    action:
+      - service: climate.turn_on
+        target:
+          entity_id: climate.ac_lounge
+      - service: switch.turn_on
+        target:
+          entity_id: switch.ac_myfan
+
+  - id: "ac_bedroom_off_6am"
+    alias: "AC: Turn off bedroom at 6am"
+    description: >
+      Turn off bedroom vent at 6am.
+    mode: single
+    trigger:
+      - platform: time
+        at: "06:00:00"
+    condition:
+      - condition: or
+        conditions:
+          - condition: state
+            entity_id: person.emily
+            state: "home"
+          - condition: state
+            entity_id: person.tom
+            state: "home"
+      - condition: template
+        value_template: >
+          {% set too_hot = states('input_number.ac_temp_too_hot') | float(24) %}
+          {% set too_cold = states('input_number.ac_temp_too_cold') | float(18) %}
+          {{ state_attr('climate.ac_lounge', 'current_temperature') | float(-1) > too_hot
+             or state_attr('climate.ac_bedroom', 'current_temperature') | float(-1) > too_hot
+             or state_attr('climate.ac_study', 'current_temperature') | float(-1) > too_hot
+             or state_attr('climate.ac_lounge', 'current_temperature') | float(99) < too_cold
+             or state_attr('climate.ac_bedroom', 'current_temperature') | float(99) < too_cold
+             or state_attr('climate.ac_study', 'current_temperature') | float(99) < too_cold }}
+    action:
+      - service: climate.turn_off
+        target:
+          entity_id: climate.ac_bedroom
+
+  - id: "ac_study_on_8am"
+    alias: "AC: Turn on study at 8am"
+    description: >
+      Turn on study vent at 8am.
+    mode: single
+    trigger:
+      - platform: time
+        at: "08:00:00"
+    condition:
+      - condition: or
+        conditions:
+          - condition: state
+            entity_id: person.emily
+            state: "home"
+          - condition: state
+            entity_id: person.tom
+            state: "home"
+      - condition: template
+        value_template: >
+          {% set too_hot = states('input_number.ac_temp_too_hot') | float(24) %}
+          {% set too_cold = states('input_number.ac_temp_too_cold') | float(18) %}
+          {{ state_attr('climate.ac_lounge', 'current_temperature') | float(-1) > too_hot
+             or state_attr('climate.ac_bedroom', 'current_temperature') | float(-1) > too_hot
+             or state_attr('climate.ac_study', 'current_temperature') | float(-1) > too_hot
+             or state_attr('climate.ac_lounge', 'current_temperature') | float(99) < too_cold
+             or state_attr('climate.ac_bedroom', 'current_temperature') | float(99) < too_cold
+             or state_attr('climate.ac_study', 'current_temperature') | float(99) < too_cold }}
+    action:
+      - service: climate.turn_on
+        target:
+          entity_id: climate.ac_study
