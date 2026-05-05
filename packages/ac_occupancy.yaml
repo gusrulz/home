@@ -8,7 +8,7 @@
 #   10pm - 5am : bedroom only       (MyZone: Bedroom)
 #   5am  - 6am : lounge + bedroom   (MyZone: Lounge)
 #   6am  - 8am : lounge only        (MyZone: Lounge)
-#   8am  - 10pm: lounge + bedroom + study (MyZone: Lounge)
+#   8am  - 10pm: lounge + study           (MyZone: Lounge)
 #
 # To activate, add this to configuration.yaml:
 #
@@ -136,7 +136,7 @@ automation:
                   - service: climate.turn_on
                     target:
                       entity_id: climate.ac_lounge
-              # 8am – 10pm: all three rooms
+              # 8am – 10pm: lounge + study
               - conditions:
                   - condition: time
                     after: "08:00:00"
@@ -151,7 +151,6 @@ automation:
                     target:
                       entity_id:
                         - climate.ac_lounge
-                        - climate.ac_bedroom
                         - climate.ac_study
 
   - id: "ac_off_when_everyone_away"
