@@ -146,10 +146,8 @@ automation:
   - id: "ac_night_mode_10pm"
     alias: "AC: Night mode at 10pm"
     description: >
-      Turn off lounge and study, keep bedroom. Switches MyZone to bedroom
+      Turn off lounge and study, keep bedroom. Sets MyZone to Bedroom
       to prevent lounge from auto-activating.
-      NOTE: assumes switch.ac_myfan OFF = bedroom, ON = lounge. Reverse
-      the turn_off/turn_on calls below if your switch works the other way.
     mode: single
     trigger:
       - platform: time
@@ -179,9 +177,11 @@ automation:
           entity_id:
             - climate.ac_lounge
             - climate.ac_study
-      - service: switch.turn_off
+      - service: select.select_option
         target:
-          entity_id: switch.ac_myfan
+          entity_id: select.ac_myzone
+        data:
+          option: Bedroom
 
   - id: "ac_morning_lounge_5am"
     alias: "AC: Morning - turn on lounge at 5am"
@@ -214,9 +214,11 @@ automation:
       - service: climate.turn_on
         target:
           entity_id: climate.ac_lounge
-      - service: switch.turn_on
+      - service: select.select_option
         target:
-          entity_id: switch.ac_myfan
+          entity_id: select.ac_myzone
+        data:
+          option: Lounge
 
   - id: "ac_bedroom_off_6am"
     alias: "AC: Turn off bedroom at 6am"
