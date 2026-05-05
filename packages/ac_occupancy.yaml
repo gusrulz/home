@@ -41,6 +41,7 @@ automation:
       When someone arrives home, when a room temperature changes, or every 10
       minutes while someone is home — turn on the appropriate rooms for the
       current time of day if any room is outside the comfort range.
+      Only notifies when the AC was previously off.
     mode: single
     trigger:
       - platform: state
@@ -70,6 +71,7 @@ automation:
       - variables:
           too_hot: "{{ states('input_number.ac_temp_too_hot') | float(24) }}"
           too_cold: "{{ states('input_number.ac_temp_too_cold') | float(18) }}"
+          ac_was_off: "{{ states('climate.ac') == 'off' }}"
       - variables:
           any_too_hot: >
             {{ state_attr('climate.ac_lounge', 'current_temperature') | float(-1) > too_hot or
@@ -152,25 +154,29 @@ automation:
                       entity_id:
                         - climate.ac_lounge
                         - climate.ac_study
-          - parallel:
-              - service: notify.mobile_app_sm_s911b
-                data:
-                  title: "AC"
-                  message: >
-                    AC turned on – {{ 'cooling' if any_too_hot else 'heating' }}.
-                    {% if now().hour >= 22 or now().hour < 5 %}Bedroom only.
-                    {% elif now().hour < 6 %}Lounge and bedroom.
-                    {% elif now().hour < 8 %}Lounge only.
-                    {% else %}Lounge and study.{% endif %}
-              - service: notify.mobile_app_sm_s921b
-                data:
-                  title: "AC"
-                  message: >
-                    AC turned on – {{ 'cooling' if any_too_hot else 'heating' }}.
-                    {% if now().hour >= 22 or now().hour < 5 %}Bedroom only.
-                    {% elif now().hour < 6 %}Lounge and bedroom.
-                    {% elif now().hour < 8 %}Lounge only.
-                    {% else %}Lounge and study.{% endif %}
+          - if:
+              - condition: template
+                value_template: "{{ ac_was_off }}"
+            then:
+              - parallel:
+                  - service: notify.mobile_app_sm_s911b
+                    data:
+                      title: "AC"
+                      message: >
+                        AC turned on – {{ 'cooling' if any_too_hot else 'heating' }}.
+                        {% if now().hour >= 22 or now().hour < 5 %}Bedroom only.
+                        {% elif now().hour < 6 %}Lounge and bedroom.
+                        {% elif now().hour < 8 %}Lounge only.
+                        {% else %}Lounge and study.{% endif %}
+                  - service: notify.mobile_app_sm_s921b
+                    data:
+                      title: "AC"
+                      message: >
+                        AC turned on – {{ 'cooling' if any_too_hot else 'heating' }}.
+                        {% if now().hour >= 22 or now().hour < 5 %}Bedroom only.
+                        {% elif now().hour < 6 %}Lounge and bedroom.
+                        {% elif now().hour < 8 %}Lounge only.
+                        {% else %}Lounge and study.{% endif %}
 
   - id: "ac_off_when_everyone_away"
     alias: "AC: Turn off all when everyone leaves"
@@ -223,7 +229,7 @@ automation:
     alias: "AC: Night mode at 10pm"
     description: >
       Set MyZone to Bedroom first (auto-activates bedroom), then turn off
-      lounge and study.
+      lounge and study. Turns on the main AC if temperature requires it.
     mode: single
     trigger:
       - platform: time
@@ -238,6 +244,21 @@ automation:
             entity_id: person.tom
             state: "home"
     action:
+      - variables:
+          too_hot: "{{ states('input_number.ac_temp_too_hot') | float(24) }}"
+          too_cold: "{{ states('input_number.ac_temp_too_cold') | float(18) }}"
+      - variables:
+          any_too_hot: >
+            {{ state_attr('climate.ac_lounge', 'current_temperature') | float(-1) > too_hot or
+               state_attr('climate.ac_bedroom', 'current_temperature') | float(-1) > too_hot or
+               state_attr('climate.ac_study', 'current_temperature') | float(-1) > too_hot }}
+          any_too_cold: >
+            {{ (state_attr('climate.ac_lounge', 'current_temperature') | float(-1) > 0 and
+                state_attr('climate.ac_lounge', 'current_temperature') | float(-1) < too_cold) or
+               (state_attr('climate.ac_bedroom', 'current_temperature') | float(-1) > 0 and
+                state_attr('climate.ac_bedroom', 'current_temperature') | float(-1) < too_cold) or
+               (state_attr('climate.ac_study', 'current_temperature') | float(-1) > 0 and
+                state_attr('climate.ac_study', 'current_temperature') | float(-1) < too_cold) }}
       - service: select.select_option
         target:
           entity_id: select.ac_myzone
@@ -248,6 +269,18 @@ automation:
           entity_id:
             - climate.ac_lounge
             - climate.ac_study
+      - if:
+          - condition: template
+            value_template: "{{ any_too_hot or any_too_cold }}"
+        then:
+          - service: climate.set_hvac_mode
+            target:
+              entity_id: climate.ac
+            data:
+              hvac_mode: "{{ 'cool' if any_too_hot else 'heat' }}"
+          - service: climate.turn_on
+            target:
+              entity_id: climate.ac_bedroom
       - parallel:
           - service: notify.mobile_app_sm_s911b
             data:
@@ -261,8 +294,8 @@ automation:
   - id: "ac_morning_lounge_5am"
     alias: "AC: Morning - turn on lounge at 5am"
     description: >
-      Set MyZone to Lounge first (auto-activates lounge), then explicitly
-      turn on lounge.
+      Set MyZone to Lounge, turn on lounge, and start the main AC if
+      temperature requires it.
     mode: single
     trigger:
       - platform: time
@@ -287,6 +320,19 @@ automation:
              or state_attr('climate.ac_bedroom', 'current_temperature') | float(99) < too_cold
              or state_attr('climate.ac_study', 'current_temperature') | float(99) < too_cold }}
     action:
+      - variables:
+          too_hot: "{{ states('input_number.ac_temp_too_hot') | float(24) }}"
+          too_cold: "{{ states('input_number.ac_temp_too_cold') | float(18) }}"
+      - variables:
+          any_too_hot: >
+            {{ state_attr('climate.ac_lounge', 'current_temperature') | float(-1) > too_hot or
+               state_attr('climate.ac_bedroom', 'current_temperature') | float(-1) > too_hot or
+               state_attr('climate.ac_study', 'current_temperature') | float(-1) > too_hot }}
+      - service: climate.set_hvac_mode
+        target:
+          entity_id: climate.ac
+        data:
+          hvac_mode: "{{ 'cool' if any_too_hot else 'heat' }}"
       - service: select.select_option
         target:
           entity_id: select.ac_myzone
@@ -308,7 +354,8 @@ automation:
   - id: "ac_bedroom_off_6am"
     alias: "AC: Turn off bedroom at 6am"
     description: >
-      Confirm MyZone is on Lounge, then turn off bedroom.
+      Confirm MyZone is on Lounge, turn off bedroom, and start the main AC
+      if temperature requires it.
     mode: single
     trigger:
       - platform: time
@@ -333,6 +380,19 @@ automation:
              or state_attr('climate.ac_bedroom', 'current_temperature') | float(99) < too_cold
              or state_attr('climate.ac_study', 'current_temperature') | float(99) < too_cold }}
     action:
+      - variables:
+          too_hot: "{{ states('input_number.ac_temp_too_hot') | float(24) }}"
+          too_cold: "{{ states('input_number.ac_temp_too_cold') | float(18) }}"
+      - variables:
+          any_too_hot: >
+            {{ state_attr('climate.ac_lounge', 'current_temperature') | float(-1) > too_hot or
+               state_attr('climate.ac_bedroom', 'current_temperature') | float(-1) > too_hot or
+               state_attr('climate.ac_study', 'current_temperature') | float(-1) > too_hot }}
+      - service: climate.set_hvac_mode
+        target:
+          entity_id: climate.ac
+        data:
+          hvac_mode: "{{ 'cool' if any_too_hot else 'heat' }}"
       - service: select.select_option
         target:
           entity_id: select.ac_myzone
@@ -354,7 +414,8 @@ automation:
   - id: "ac_study_on_8am"
     alias: "AC: Turn on study at 8am"
     description: >
-      Turn on study vent at 8am. MyZone is already on Lounge from 5am.
+      Turn on study vent and start the main AC if temperature requires it.
+      MyZone is already on Lounge from 5am.
     mode: single
     trigger:
       - platform: time
@@ -379,6 +440,19 @@ automation:
              or state_attr('climate.ac_bedroom', 'current_temperature') | float(99) < too_cold
              or state_attr('climate.ac_study', 'current_temperature') | float(99) < too_cold }}
     action:
+      - variables:
+          too_hot: "{{ states('input_number.ac_temp_too_hot') | float(24) }}"
+          too_cold: "{{ states('input_number.ac_temp_too_cold') | float(18) }}"
+      - variables:
+          any_too_hot: >
+            {{ state_attr('climate.ac_lounge', 'current_temperature') | float(-1) > too_hot or
+               state_attr('climate.ac_bedroom', 'current_temperature') | float(-1) > too_hot or
+               state_attr('climate.ac_study', 'current_temperature') | float(-1) > too_hot }}
+      - service: climate.set_hvac_mode
+        target:
+          entity_id: climate.ac
+        data:
+          hvac_mode: "{{ 'cool' if any_too_hot else 'heat' }}"
       - service: climate.turn_on
         target:
           entity_id: climate.ac_study
