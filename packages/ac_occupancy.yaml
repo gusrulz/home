@@ -209,16 +209,6 @@ automation:
           - condition: state
             entity_id: person.tom
             state: "home"
-      - condition: template
-        value_template: >
-          {% set too_hot = states('input_number.ac_temp_too_hot') | float(24) %}
-          {% set too_cold = states('input_number.ac_temp_too_cold') | float(18) %}
-          {{ state_attr('climate.ac_lounge', 'current_temperature') | float(-1) > too_hot
-             or state_attr('climate.ac_bedroom', 'current_temperature') | float(-1) > too_hot
-             or state_attr('climate.ac_study', 'current_temperature') | float(-1) > too_hot
-             or state_attr('climate.ac_lounge', 'current_temperature') | float(99) < too_cold
-             or state_attr('climate.ac_bedroom', 'current_temperature') | float(99) < too_cold
-             or state_attr('climate.ac_study', 'current_temperature') | float(99) < too_cold }}
     action:
       - service: select.select_option
         target:
