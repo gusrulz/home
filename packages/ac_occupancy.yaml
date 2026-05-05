@@ -8,7 +8,7 @@
 #   10pm - 5am : bedroom only       (MyZone: Bedroom)
 #   5am  - 6am : lounge + bedroom   (MyZone: Lounge)
 #   6am  - 8am : lounge only        (MyZone: Lounge)
-#   8am  - 10pm: lounge + study           (MyZone: Lounge)
+#   8am  - 10pm: lounge + study     (MyZone: Lounge)
 #
 # To activate, add this to configuration.yaml:
 #
@@ -152,6 +152,25 @@ automation:
                       entity_id:
                         - climate.ac_lounge
                         - climate.ac_study
+          - parallel:
+              - service: notify.mobile_app_sm_s911b
+                data:
+                  title: "AC"
+                  message: >
+                    AC turned on – {{ 'cooling' if any_too_hot else 'heating' }}.
+                    {% if now().hour >= 22 or now().hour < 5 %}Bedroom only.
+                    {% elif now().hour < 6 %}Lounge and bedroom.
+                    {% elif now().hour < 8 %}Lounge only.
+                    {% else %}Lounge and study.{% endif %}
+              - service: notify.mobile_app_sm_s921b
+                data:
+                  title: "AC"
+                  message: >
+                    AC turned on – {{ 'cooling' if any_too_hot else 'heating' }}.
+                    {% if now().hour >= 22 or now().hour < 5 %}Bedroom only.
+                    {% elif now().hour < 6 %}Lounge and bedroom.
+                    {% elif now().hour < 8 %}Lounge only.
+                    {% else %}Lounge and study.{% endif %}
 
   - id: "ac_off_when_everyone_away"
     alias: "AC: Turn off all when everyone leaves"
@@ -190,6 +209,15 @@ automation:
             - climate.ac_lounge
             - climate.ac_front_room
             - climate.ac_study
+      - parallel:
+          - service: notify.mobile_app_sm_s911b
+            data:
+              title: "AC"
+              message: "AC turned off – everyone is away."
+          - service: notify.mobile_app_sm_s921b
+            data:
+              title: "AC"
+              message: "AC turned off – everyone is away."
 
   - id: "ac_night_mode_10pm"
     alias: "AC: Night mode at 10pm"
@@ -220,6 +248,15 @@ automation:
           entity_id:
             - climate.ac_lounge
             - climate.ac_study
+      - parallel:
+          - service: notify.mobile_app_sm_s911b
+            data:
+              title: "AC"
+              message: "Night mode: switched to bedroom only until 5am."
+          - service: notify.mobile_app_sm_s921b
+            data:
+              title: "AC"
+              message: "Night mode: switched to bedroom only until 5am."
 
   - id: "ac_morning_lounge_5am"
     alias: "AC: Morning - turn on lounge at 5am"
@@ -258,6 +295,15 @@ automation:
       - service: climate.turn_on
         target:
           entity_id: climate.ac_lounge
+      - parallel:
+          - service: notify.mobile_app_sm_s911b
+            data:
+              title: "AC"
+              message: "Morning: lounge and bedroom now active."
+          - service: notify.mobile_app_sm_s921b
+            data:
+              title: "AC"
+              message: "Morning: lounge and bedroom now active."
 
   - id: "ac_bedroom_off_6am"
     alias: "AC: Turn off bedroom at 6am"
@@ -295,6 +341,15 @@ automation:
       - service: climate.turn_off
         target:
           entity_id: climate.ac_bedroom
+      - parallel:
+          - service: notify.mobile_app_sm_s911b
+            data:
+              title: "AC"
+              message: "Bedroom turned off. Lounge only until 8am."
+          - service: notify.mobile_app_sm_s921b
+            data:
+              title: "AC"
+              message: "Bedroom turned off. Lounge only until 8am."
 
   - id: "ac_study_on_8am"
     alias: "AC: Turn on study at 8am"
@@ -327,3 +382,12 @@ automation:
       - service: climate.turn_on
         target:
           entity_id: climate.ac_study
+      - parallel:
+          - service: notify.mobile_app_sm_s911b
+            data:
+              title: "AC"
+              message: "Study activated. Lounge and study now active."
+          - service: notify.mobile_app_sm_s921b
+            data:
+              title: "AC"
+              message: "Study activated. Lounge and study now active."
