@@ -4,6 +4,12 @@
 # Turns off all AC units when the last person leaves.
 # Includes a night/morning schedule for room switching.
 #
+# Room schedule:
+#   10pm - 5am : bedroom only       (MyZone: Bedroom)
+#   5am  - 6am : lounge + bedroom   (MyZone: Lounge)
+#   6am  - 8am : lounge only        (MyZone: Lounge)
+#   8am  - 10pm: lounge + bedroom + study (MyZone: Lounge)
+#
 # To activate, add this to configuration.yaml:
 #
 #   homeassistant:
@@ -33,8 +39,8 @@ automation:
     alias: "AC: Turn on when home and room is uncomfortable"
     description: >
       When someone arrives home, when a room temperature changes, or every 10
-      minutes while someone is home — turn on cooling in rooms above the upper
-      threshold and heating in rooms below the lower threshold.
+      minutes while someone is home — turn on the appropriate rooms for the
+      current time of day if any room is outside the comfort range.
     mode: single
     trigger:
       - platform: state
@@ -76,43 +82,83 @@ automation:
                 state_attr('climate.ac_bedroom', 'current_temperature') | float(-1) < too_cold) or
                (state_attr('climate.ac_study', 'current_temperature') | float(-1) > 0 and
                 state_attr('climate.ac_study', 'current_temperature') | float(-1) < too_cold) }}
-      - choose:
-          - conditions:
-              - condition: template
-                value_template: "{{ any_too_hot }}"
-            sequence:
-              - service: climate.set_hvac_mode
-                target:
-                  entity_id: climate.ac
-                data:
-                  hvac_mode: cool
-              - service: climate.turn_on
-                target:
-                  entity_id:
-                    - climate.ac_lounge
-                    - climate.ac_bedroom
-                    - climate.ac_study
-          - conditions:
-              - condition: template
-                value_template: "{{ any_too_cold }}"
-            sequence:
-              - service: climate.set_hvac_mode
-                target:
-                  entity_id: climate.ac
-                data:
-                  hvac_mode: heat
-              - service: climate.turn_on
-                target:
-                  entity_id:
-                    - climate.ac_lounge
-                    - climate.ac_bedroom
-                    - climate.ac_study
+      - if:
+          - condition: template
+            value_template: "{{ any_too_hot or any_too_cold }}"
+        then:
+          - service: climate.set_hvac_mode
+            target:
+              entity_id: climate.ac
+            data:
+              hvac_mode: "{{ 'cool' if any_too_hot else 'heat' }}"
+          - choose:
+              # 10pm – 5am: bedroom only
+              - conditions:
+                  - condition: time
+                    after: "22:00:00"
+                    before: "05:00:00"
+                sequence:
+                  - service: select.select_option
+                    target:
+                      entity_id: select.ac_myzone
+                    data:
+                      option: Bedroom
+                  - service: climate.turn_on
+                    target:
+                      entity_id: climate.ac_bedroom
+              # 5am – 6am: lounge + bedroom
+              - conditions:
+                  - condition: time
+                    after: "05:00:00"
+                    before: "06:00:00"
+                sequence:
+                  - service: select.select_option
+                    target:
+                      entity_id: select.ac_myzone
+                    data:
+                      option: Lounge
+                  - service: climate.turn_on
+                    target:
+                      entity_id:
+                        - climate.ac_lounge
+                        - climate.ac_bedroom
+              # 6am – 8am: lounge only
+              - conditions:
+                  - condition: time
+                    after: "06:00:00"
+                    before: "08:00:00"
+                sequence:
+                  - service: select.select_option
+                    target:
+                      entity_id: select.ac_myzone
+                    data:
+                      option: Lounge
+                  - service: climate.turn_on
+                    target:
+                      entity_id: climate.ac_lounge
+              # 8am – 10pm: all three rooms
+              - conditions:
+                  - condition: time
+                    after: "08:00:00"
+                    before: "22:00:00"
+                sequence:
+                  - service: select.select_option
+                    target:
+                      entity_id: select.ac_myzone
+                    data:
+                      option: Lounge
+                  - service: climate.turn_on
+                    target:
+                      entity_id:
+                        - climate.ac_lounge
+                        - climate.ac_bedroom
+                        - climate.ac_study
 
   - id: "ac_off_when_everyone_away"
     alias: "AC: Turn off all when everyone leaves"
     description: >
       When a person leaves home and no one else is still home,
-      turn off all AC units.
+      set MyZone to Inactive then turn off all AC units.
     mode: single
     trigger:
       - platform: state
@@ -132,7 +178,12 @@ automation:
             entity_id: person.tom
             state: "home"
     action:
-      - service: climate.set_hvac_mode
+      - service: select.select_option
+        target:
+          entity_id: select.ac_myzone
+        data:
+          option: Inactive
+      - service: climate.turn_off
         target:
           entity_id:
             - climate.ac
@@ -140,14 +191,12 @@ automation:
             - climate.ac_lounge
             - climate.ac_front_room
             - climate.ac_study
-        data:
-          hvac_mode: "off"
 
   - id: "ac_night_mode_10pm"
     alias: "AC: Night mode at 10pm"
     description: >
-      Turn off lounge and study, keep bedroom. Sets MyZone to Bedroom
-      to prevent lounge from auto-activating.
+      Set MyZone to Bedroom first (auto-activates bedroom), then turn off
+      lounge and study.
     mode: single
     trigger:
       - platform: time
@@ -172,21 +221,22 @@ automation:
              or state_attr('climate.ac_bedroom', 'current_temperature') | float(99) < too_cold
              or state_attr('climate.ac_study', 'current_temperature') | float(99) < too_cold }}
     action:
-      - service: climate.turn_off
-        target:
-          entity_id:
-            - climate.ac_lounge
-            - climate.ac_study
       - service: select.select_option
         target:
           entity_id: select.ac_myzone
         data:
           option: Bedroom
+      - service: climate.turn_off
+        target:
+          entity_id:
+            - climate.ac_lounge
+            - climate.ac_study
 
   - id: "ac_morning_lounge_5am"
     alias: "AC: Morning - turn on lounge at 5am"
     description: >
-      Turn on lounge and redirect MyZone back to lounge.
+      Set MyZone to Lounge first (auto-activates lounge), then explicitly
+      turn on lounge.
     mode: single
     trigger:
       - platform: time
@@ -211,19 +261,19 @@ automation:
              or state_attr('climate.ac_bedroom', 'current_temperature') | float(99) < too_cold
              or state_attr('climate.ac_study', 'current_temperature') | float(99) < too_cold }}
     action:
-      - service: climate.turn_on
-        target:
-          entity_id: climate.ac_lounge
       - service: select.select_option
         target:
           entity_id: select.ac_myzone
         data:
           option: Lounge
+      - service: climate.turn_on
+        target:
+          entity_id: climate.ac_lounge
 
   - id: "ac_bedroom_off_6am"
     alias: "AC: Turn off bedroom at 6am"
     description: >
-      Turn off bedroom vent at 6am.
+      Confirm MyZone is on Lounge, then turn off bedroom.
     mode: single
     trigger:
       - platform: time
@@ -248,6 +298,11 @@ automation:
              or state_attr('climate.ac_bedroom', 'current_temperature') | float(99) < too_cold
              or state_attr('climate.ac_study', 'current_temperature') | float(99) < too_cold }}
     action:
+      - service: select.select_option
+        target:
+          entity_id: select.ac_myzone
+        data:
+          option: Lounge
       - service: climate.turn_off
         target:
           entity_id: climate.ac_bedroom
@@ -255,7 +310,7 @@ automation:
   - id: "ac_study_on_8am"
     alias: "AC: Turn on study at 8am"
     description: >
-      Turn on study vent at 8am.
+      Turn on study vent at 8am. MyZone is already on Lounge from 5am.
     mode: single
     trigger:
       - platform: time
